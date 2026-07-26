@@ -1,7 +1,6 @@
 import streamlit as st
 import json
 import random
-import time
 from datetime import datetime
 
 # --- CONFIGURAÇÕES E DADOS PADRÃO ---
@@ -52,24 +51,40 @@ def obter_dia_atual_pt():
     indice = datetime.now().weekday()
     return DIAS_SEMANA_PT[indice]
 
-# --- REESTRUTURAÇÃO COMPLETA DE MEMÓRIA (SESSION STATE FIX) ---
+# --- INICIALIZAÇÃO DE MEMÓRIA SEGURA ---
 if "dados_jogador" not in st.session_state:
     st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
 
-# Atalho para modificação segura
 dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
 dia_hoje_nome = obter_dia_atual_pt()
 
-# Limpeza e ciclo de datas síncrono
-nova_lista_com_ciclo = []
+# --- 🛠️ FUNÇÕES DE AÇÃO CRÍTICA (CALLBACKS DE CORREÇÃO) 🛠️ ---
+def acao_deletar_missao(id_missao):
+    st.session_state["dados_jogador"]["missoes"] = [
+        m for m in st.session_state["dados_jogador"]["missoes"] if m["id"] != id_missao
+    ]
+    st.toast("❌ Missão eliminada com sucesso!")
+
+def acao_resetar_sistema():
+    st.session_state["dados_jogador"]["nivel"] = 1
+    st.session_state["dados_jogador"]["xp"] = 0
+    st.session_state["dados_jogador"]["ouro"] = 0
+    st.session_state["dados_jogador"]["atributos"] = {"Força": 10, "Inteligência": 10, "Vitalidade": 10, "Carisma": 10, "Agilidade": 10}
+    st.session_state["dados_jogador"]["inventario"] = {}
+    st.toast("💥 O Sistema foi redefinido para o Nível 1!")
+
+def acao_aplicar_penalidade(m_id, m_xp, m_ouro, m_attr):
+    st.session_state["dados_jogador"]["xp"] = max(0, st.session_state["dados_jogador"]["xp"] - m_xp)
+    st.session_state["dados_jogador"]["ouro"] = max(0, st.session_state["dados_jogador"]["ouro"] - m_ouro)
+    st.session_state["dados_jogador"]["atributos"][m_attr] = max(10, st.session_state["dados_jogador"]["atributos"][m_attr] - 1)
+    st.toast(f"🚨 Penalidade aplicada em {m_attr}!")
+
+# Limpeza automática de datas na virada do dia real
 for m_ciclo in dados["missoes"]:
-    if not m_ciclo.get("recorrente", True) and m_ciclo["concluida_em"] != "" and m_ciclo["concluida_em"] != data_hoje:
-        continue
-    if m_ciclo.get("recorrente", True) and m_ciclo["concluida_em"] != "" and m_ciclo["concluida_em"] != data_hoje:
-        m_ciclo["concluida_em"] = ""
-    nova_lista_com_ciclo.append(m_ciclo)
-dados["missoes"] = nova_lista_com_ciclo
+    if m_ciclo["concluida_em"] != "" and m_ciclo["concluida_em"] != data_hoje:
+        if m_ciclo.get("recorrente", True):
+            m_ciclo["concluida_em"] = ""
 
 # --- INTERFACE DO USUÁRIO ---
 st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
@@ -118,21 +133,19 @@ with aba_missoes:
                 check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
             
             with col_fail:
-                if st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida):
-                    dados["xp"] = max(0, dados["xp"] - m["xp"])
-                    dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
-                    dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
-                    st.error("Penalidade aplicada com sucesso!")
-                    time.sleep(1)
-                    st.rerun()
+                # CORREÇÃO: Botão de falha aciona a penalidade via callback seguro
+                st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida, on_click=acao_aplicar_penalidade, args=(m['id'], m['xp'], m['ouro'], m['attr']))
                 
             if check and not foi_concluida:
                 m["concluida_em"] = data_hoje
                 dados["xp"] += m["xp"]
                 dados["ouro"] += m["ouro"]
                 dados["atributos"][m["attr"]] += 1
+                
+                # Tratamento de missões do tipo Única
                 if not m.get("recorrente", True):
                     dados["missoes"].remove(m)
+                    
                 while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
                     dados["xp"] -= calcular_xp_nec(dados["nivel"])
                     dados["nivel"] += 1
@@ -187,35 +200,18 @@ with aba_cadastrar:
         if botao_salvar and novo_name:
             if not dias_sel: st.error("Selecione um dia!")
             else:
-                nid = int(time.time() * 1000) + random.randint(1, 99)
+                nid = int(random.randint(100000, 999999))
                 nova_missao = {"id": nid, "nome": novo_name, "xp": int(rxp), "ouro": int(rouro), "attr": MAPA_ATRIBUTOS[attr_sel], "dias": dias_sel, "recorrente": is_recorrente, "concluida_em": ""}
                 dados["missoes"].append(nova_missao)
-                st.success("Hábito salvo!")
+                st.success("Hábito salvo com sucesso!")
                 st.rerun()
 
 # --- 5. ABA CONFIGURAÇÕES CRÍTICAS (EXCLUSÃO E RESET BLINDADOS) ---
 with aba_excluir:
     st.write("### ❌ Remover Missões Existentes")
     if not dados["missoes"]:
-        st.caption("Nenhum hábito registrado.")
+        st.caption("Nenhum hábito registrado no banco de dados.")
     else:
-        # CORREÇÃO DEFINITIVA: Exclusão síncrona direta com indexação por chave estruturada estável
-        para_deletar = None
         for idx, m in enumerate(dados["missoes"]):
             col_info, col_botao = st.columns(2)
             agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
-            rep_str = "Recorrente" if m.get("recorrente", True) else "Única"
-            col_info.write(f"**{m['nome']}**  \n_{m['attr']} | {agenda_str} | {rep_str}_")
-            
-            if col_botao.button("Deletar", key=f"del_c_{m['id']}_{idx}"):
-                para_deletar = m
-
-        if para_deletar is not None:
-            dados["missoes"].remove(para_deletar)
-            st.toast("❌ Missão removida do Sistema!")
-            time.sleep(0.5)
-            st.rerun()
-
-    st.write("---")
-    st.write("### 🚨 Reset de Nível do Caçador")
-    with st.expander("💀 Apagar Progresso"):
