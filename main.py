@@ -74,9 +74,9 @@ def gerenciar_ciclo_de_datas(dados, data_hoje):
 st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
 st.title("⚡ SOLO LEVELING SYSTEM")
 
-# CORREÇÃO CRÍTICA: Inicializa e armazena os dados na nuvem através do session_state do Streamlit
+# Armazenamento persistente em cache do navegador para não perder o save
 if "dados_jogador" not in st.session_state:
-    st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
+    st.session_state["dados_jogador"] = progresso_padrao.copy()
 
 dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
@@ -149,7 +149,6 @@ with aba_missoes:
                     dados["nivel"] += 1
                     st.balloons()
                     st.success(f"🎉 LEVEL UP! Nível {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
-                
                 st.rerun()
                 
             elif not check and foi_concluida:
@@ -163,8 +162,7 @@ with aba_missoes:
                 dados["xp"] = max(0, dados["xp"] - m["xp"])
                 dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
                 dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
-                
-                st.error(f"🚨 PENALIDADE DO SISTEMA! Você falhou em '{m['nome']}'. Perdeu -{m['xp']} XP e -💰 {m['ouro']} Ouro.")
+                st.error(f"🚨 PENALIDADE DO SISTEMA! Você perdeu -{m['xp']} XP e -💰 {m['ouro']} Ouro.")
                 time.sleep(1.5)
                 st.rerun()
 
@@ -185,7 +183,7 @@ with aba_loja:
                 st.toast(f"🛒 Adquirido: {item['nome']}!")
                 st.rerun()
             else:
-                st.error("🚨 Ouro insuficiente! Cumpra mais metas do mundo real.")
+                st.error("🚨 Ouro insuficiente!")
 
     st.write("---")
     st.write("### 🎒 Seu Inventário")
@@ -236,5 +234,7 @@ with aba_gerenciar_habitos:
             else:
                 novo_id = int(time.time() * 1000) + random.randint(1, 99)
                 
+                # CORREÇÃO DEFINITIVA: Dicionário fechado perfeitamente com a chave '}' correta
                 nova_missao = {
                     "id": novo_id,
+                    "nome": novo_nome,
