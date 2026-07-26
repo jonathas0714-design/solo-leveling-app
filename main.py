@@ -133,7 +133,6 @@ with aba_missoes:
     if not missoes_hoje:
         st.info("⚔️ Nenhuma missão agendada para hoje! Use o dia para descansar e recuperar energias.")
     else:
-        missoes_para_remover = []
         for m in missoes_hoje:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
@@ -146,8 +145,9 @@ with aba_missoes:
                 dados["ouro"] += m["ouro"]
                 dados["atributos"][m["attr"]] += 1
                 
+                # Se for missão única, deleta diretamente da lista global
                 if not m.get("recorrente", True):
-                    missoes_para_remover.append(m)
+                    dados["missoes"].remove(m)
                 
                 while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
                     dados["xp"] -= calcular_xp_nec(dados["nivel"])
@@ -155,10 +155,6 @@ with aba_missoes:
                     st.balloons()
                     st.success(f"🎉 LEVEL UP! Nível {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
                 
-                for m_rem in missoes_para_remover:
-                    if m_rem in dados["missoes"]:
-                        dados["missoes"].remove(m_rem)
-                        
                 salvar_dados(dados)
                 st.session_state["dados_jogador"] = dados
                 st.rerun()
@@ -212,7 +208,7 @@ with aba_loja:
                 time.sleep(1)
                 st.rerun()
 
-# --- 4. ABA GERENCIAR HÁBITOS (Cadastro Firme e Opção de Reset) ---
+# --- 4. ABA GERENCIAR HÁBITOS ---
 with aba_gerenciar_habitos:
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
     
@@ -235,3 +231,8 @@ with aba_gerenciar_habitos:
         
         recorrencia_tipo = st.radio(
             "Regra de Repetição da Missão:",
+            ("🔄 Recorrente (Aparece toda semana nestes dias)", "📌 Única (Executa uma vez e some para sempre)")
+        )
+        is_recorrente = True if "Recorrente" in recorrencia_tipo else False
+        
+        col_xp, col_ouro = st.columns(2)
