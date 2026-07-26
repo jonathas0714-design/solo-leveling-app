@@ -77,12 +77,10 @@ def gerenciar_ciclo_de_datas(dados, data_hoje):
     mudou = False
     
     for m in dados["missoes"]:
-        # Se for uma missão única e já foi concluída em um dia anterior, ela é descartada do banco
         if not m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
             mudou = True
             continue
             
-        # Se for recorrente e mudou o dia real, limpa a marcação para poder fazer de novo
         if m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
             m["concluida_em"] = ""
             mudou = True
@@ -104,7 +102,6 @@ dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
 dia_hoje_nome = obter_dia_atual_pt()
 
-# Limpa e organiza as tarefas baseadas na data atual do celular
 gerenciar_ciclo_de_datas(dados, data_hoje)
 
 aba_status, aba_missoes, aba_loja, aba_gerenciar_habitos = st.tabs([
@@ -125,7 +122,7 @@ with aba_status:
                 dados["nome"] = novo_nome_input.strip()
                 salvar_dados(dados)
                 st.session_state["dados_jogador"] = dados
-                st.success("Identidade atualizada!")
+                st.success("Identidade updated!")
                 st.rerun()
 
     xp_nec = calcular_xp_nec(dados["nivel"])
@@ -152,7 +149,6 @@ with aba_missoes:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
             
-            # Caixa de seleção para cumprir a meta
             check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
             
             if check and not foi_concluida:
@@ -161,7 +157,6 @@ with aba_missoes:
                 dados["ouro"] += m["ouro"]
                 dados["atributos"][m["attr"]] += 1
                 
-                # Sistema de níveis múltiplos dinâmicos
                 while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
                     dados["xp"] -= calcular_xp_nec(dados["nivel"])
                     dados["nivel"] += 1
@@ -188,7 +183,8 @@ with aba_loja:
     
     st.write("### 🛍️ Recompensas Disponíveis para Compra")
     for k, item in LOJA_SISTEMA.items():
-        col_item_info, col_item_botao = st.columns()
+        # CORREÇÃO: Adicionado o argumento numérico 2 em st.columns
+        col_item_info, col_item_botao = st.columns(2)
         col_item_info.write(f"**{item['nome']}**  \n_Custo: 💰 {item['custo']} Ouro_")
         
         if col_item_botao.button("Comprar", key=f"buy_{k}"):
@@ -208,7 +204,8 @@ with aba_loja:
         st.caption("Seu inventário está vazio.")
     else:
         for nome_item, qtd in list(dados["inventario"].items()):
-            col_inv_info, col_inv_botao = st.columns()
+            # CORREÇÃO: Adicionado o argumento numérico 2 em st.columns
+            col_inv_info, col_inv_botao = st.columns(2)
             col_inv_info.write(f"• **{nome_item}** (Quantidade: x{qtd})")
             if col_inv_botao.button("Usar", key=f"use_{nome_item}"):
                 dados["inventario"][nome_item] -= 1
@@ -239,3 +236,7 @@ with aba_gerenciar_habitos:
         if col_dias_1.checkbox("Qua"): dias_selecionados.append("Quarta")
         if col_dias_1.checkbox("Qui"): dias_selecionados.append("Quinta")
         if col_dias_2.checkbox("Sex"): dias_selecionados.append("Sexta")
+        if col_dias_2.checkbox("Sáb"): dias_selecionados.append("Sábado")
+        if col_dias_2.checkbox("Dom"): dias_selecionados.append("Domingo")
+        
+        recorrencia_tipo = st.radio(
