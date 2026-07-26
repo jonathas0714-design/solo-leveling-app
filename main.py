@@ -122,7 +122,7 @@ with aba_status:
                 dados["nome"] = novo_nome_input.strip()
                 salvar_dados(dados)
                 st.session_state["dados_jogador"] = dados
-                st.success("Identidade updated!")
+                st.success("Identidade atualizada!")
                 st.rerun()
 
     xp_nec = calcular_xp_nec(dados["nivel"])
@@ -157,6 +157,9 @@ with aba_missoes:
                 dados["ouro"] += m["ouro"]
                 dados["atributos"][m["attr"]] += 1
                 
+                if not m.get("recorrente", True):
+                    dados["missoes"].remove(m)
+                
                 while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
                     dados["xp"] -= calcular_xp_nec(dados["nivel"])
                     dados["nivel"] += 1
@@ -183,7 +186,6 @@ with aba_loja:
     
     st.write("### 🛍️ Recompensas Disponíveis para Compra")
     for k, item in LOJA_SISTEMA.items():
-        # CORREÇÃO: Adicionado o argumento numérico 2 em st.columns
         col_item_info, col_item_botao = st.columns(2)
         col_item_info.write(f"**{item['nome']}**  \n_Custo: 💰 {item['custo']} Ouro_")
         
@@ -204,7 +206,6 @@ with aba_loja:
         st.caption("Seu inventário está vazio.")
     else:
         for nome_item, qtd in list(dados["inventario"].items()):
-            # CORREÇÃO: Adicionado o argumento numérico 2 em st.columns
             col_inv_info, col_inv_botao = st.columns(2)
             col_inv_info.write(f"• **{nome_item}** (Quantidade: x{qtd})")
             if col_inv_botao.button("Usar", key=f"use_{nome_item}"):
@@ -236,7 +237,7 @@ with aba_gerenciar_habitos:
         if col_dias_1.checkbox("Qua"): dias_selecionados.append("Quarta")
         if col_dias_1.checkbox("Qui"): dias_selecionados.append("Quinta")
         if col_dias_2.checkbox("Sex"): dias_selecionados.append("Sexta")
+        # CORREÇÃO: Parênteses fechados corretamente abaixo
         if col_dias_2.checkbox("Sáb"): dias_selecionados.append("Sábado")
         if col_dias_2.checkbox("Dom"): dias_selecionados.append("Domingo")
         
-        recorrencia_tipo = st.radio(
