@@ -52,52 +52,28 @@ def obter_dia_atual_pt():
     indice = datetime.now().weekday()
     return DIAS_SEMANA_PT[indice]
 
-def gerenciar_ciclo_de_datas(dados, data_hoje):
-    nova_lista_missoes = []
-    mudou = False
-    for m in dados["missoes"]:
-        if not m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
-            mudou = True
-            continue
-        if m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
-            m["concluida_em"] = ""
-            mudou = True
-        nova_lista_missoes.append(m)
-    if mudou:
-        dados["missoes"] = nova_lista_missoes
-
-# --- CALLBACKS DO SISTEMA (AÇÕES EM SEGUNDO PLANO) ---
-def callback_deletar(missao_alvo):
-    st.session_state["dados_jogador"]["missoes"].remove(missao_alvo)
-    st.toast("❌ Missão removida do Sistema!")
-
-def callback_falhar(missao_alvo):
-    dados = st.session_state["dados_jogador"]
-    dados["xp"] = max(0, dados["xp"] - missao_alvo["xp"])
-    dados["ouro"] = max(0, dados["ouro"] - missao_alvo["ouro"])
-    dados["atributos"][missao_alvo["attr"]] = max(10, dados["atributos"][missao_alvo["attr"]] - 1)
-    st.sidebar.error(f"🚨 PENALIDADE: Perdeu XP, Ouro e -1 em {missao_alvo['attr']}!")
-
-def callback_resetar():
-    st.session_state["dados_jogador"]["nivel"] = 1
-    st.session_state["dados_jogador"]["xp"] = 0
-    st.session_state["dados_jogador"]["ouro"] = 0
-    st.session_state["dados_jogador"]["atributos"] = {"Força": 10, "Inteligência": 10, "Vitalidade": 10, "Carisma": 10, "Agilidade": 10}
-    st.session_state["dados_jogador"]["inventario"] = {}
-    st.sidebar.warning("💥 O Sistema foi completamente resetado!")
-
-# --- CONFIGURAÇÃO DA TELA MÓVEL ---
-st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
-st.title("⚡ SOLO LEVELING SYSTEM")
-
+# --- REESTRUTURAÇÃO COMPLETA DE MEMÓRIA (SESSION STATE FIX) ---
 if "dados_jogador" not in st.session_state:
     st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
 
+# Atalho para modificação segura
 dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
 dia_hoje_nome = obter_dia_atual_pt()
 
-gerenciar_ciclo_de_datas(dados, data_hoje)
+# Limpeza e ciclo de datas síncrono
+nova_lista_com_ciclo = []
+for m_ciclo in dados["missoes"]:
+    if not m_ciclo.get("recorrente", True) and m_ciclo["concluida_em"] != "" and m_ciclo["concluida_em"] != data_hoje:
+        continue
+    if m_ciclo.get("recorrente", True) and m_ciclo["concluida_em"] != "" and m_ciclo["concluida_em"] != data_hoje:
+        m_ciclo["concluida_em"] = ""
+    nova_lista_com_ciclo.append(m_ciclo)
+dados["missoes"] = nova_lista_com_ciclo
+
+# --- INTERFACE DO USUÁRIO ---
+st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
+st.title("⚡ SOLO LEVELING SYSTEM")
 
 aba_status, aba_missoes, aba_loja, aba_cadastrar, aba_excluir = st.tabs([
     "👤 Status", "🎯 Missões de Hoje", "🛒 Loja", "➕ Criar Hábito", "❌ Configurações Críticas"
@@ -107,8 +83,8 @@ aba_status, aba_missoes, aba_loja, aba_cadastrar, aba_excluir = st.tabs([
 with aba_status:
     st.subheader(f"Caçador: {dados['nome']}")
     with st.expander("⚙️ Alterar Nome do Caçador"):
-        novo_nome_input = st.text_input("Insira seu nome ou apelido:", value=dados["nome"])
-        if st.button("Confirmar Despertar"):
+        novo_nome_input = st.text_input("Insira seu nome ou apelido:", value=dados["nome"], key="input_nome_player")
+        if st.button("Confirmar Despertar", key="btn_nome_player"):
             if novo_nome_input.strip():
                 dados["nome"] = novo_nome_input.strip()
                 st.rerun()
@@ -137,12 +113,18 @@ with aba_missoes:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
             
-            col_task, col_fail = st.columns([3, 1])
+            col_task, col_fail = st.columns(2)
             with col_task:
                 check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
+            
             with col_fail:
-                # CORREÇÃO: Função de falha agora usa callback direto de clique estável
-                st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida, on_click=callback_falhar, args=(m,))
+                if st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida):
+                    dados["xp"] = max(0, dados["xp"] - m["xp"])
+                    dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
+                    dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
+                    st.error("Penalidade aplicada com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
                 
             if check and not foi_concluida:
                 m["concluida_em"] = data_hoje
@@ -217,6 +199,23 @@ with aba_excluir:
     if not dados["missoes"]:
         st.caption("Nenhum hábito registrado.")
     else:
+        # CORREÇÃO DEFINITIVA: Exclusão síncrona direta com indexação por chave estruturada estável
+        para_deletar = None
         for idx, m in enumerate(dados["missoes"]):
-            col_info, col_botao = st.columns([3, 1])
+            col_info, col_botao = st.columns(2)
             agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
+            rep_str = "Recorrente" if m.get("recorrente", True) else "Única"
+            col_info.write(f"**{m['nome']}**  \n_{m['attr']} | {agenda_str} | {rep_str}_")
+            
+            if col_botao.button("Deletar", key=f"del_c_{m['id']}_{idx}"):
+                para_deletar = m
+
+        if para_deletar is not None:
+            dados["missoes"].remove(para_deletar)
+            st.toast("❌ Missão removida do Sistema!")
+            time.sleep(0.5)
+            st.rerun()
+
+    st.write("---")
+    st.write("### 🚨 Reset de Nível do Caçador")
+    with st.expander("💀 Apagar Progresso"):
