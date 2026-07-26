@@ -42,7 +42,7 @@ progresso_padrao = {
     "inventario": {}
 }
 
-# --- FUNÇÕES DE LOGICA E CURVA DE NÍVEL ---
+# --- FUNÇÕES DE LOGICA ---
 def calcular_xp_nec(nivel):
     if nivel == 1:
         return 100
@@ -55,28 +55,23 @@ def obter_dia_atual_pt():
 def gerenciar_ciclo_de_datas(dados, data_hoje):
     nova_lista_missoes = []
     mudou = False
-    
     for m in dados["missoes"]:
         if not m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
             mudou = True
             continue
-            
         if m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
             m["concluida_em"] = ""
             mudou = True
-            
         nova_lista_missoes.append(m)
-        
     if mudou:
         dados["missoes"] = nova_lista_missoes
 
-# --- INTERFACE DO USUÁRIO (STREAMLIT) ---
+# --- INTERFACE DO USUÁRIO ---
 st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
 st.title("⚡ SOLO LEVELING SYSTEM")
 
-# Armazenamento persistente em cache do navegador para não perder o save
 if "dados_jogador" not in st.session_state:
-    st.session_state["dados_jogador"] = progresso_padrao.copy()
+    st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
 
 dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
@@ -85,16 +80,12 @@ dia_hoje_nome = obter_dia_atual_pt()
 gerenciar_ciclo_de_datas(dados, data_hoje)
 
 aba_status, aba_missoes, aba_loja, aba_gerenciar_habitos = st.tabs([
-    "👤 Status", 
-    "🎯 Missões de Hoje", 
-    "🛒 Loja do Sistema", 
-    "🛠️ Gerenciar Hábitos"
+    "👤 Status", "🎯 Missões de Hoje", "🛒 Loja do Sistema", "🛠️ Gerenciar Hábitos"
 ])
 
 # --- 1. ABA STATUS ---
 with aba_status:
     st.subheader(f"Caçador: {dados['nome']}")
-    
     with st.expander("⚙️ Alterar Nome do Caçador"):
         novo_nome_input = st.text_input("Insira seu nome ou apelido:", value=dados["nome"])
         if st.button("Confirmar Despertar"):
@@ -121,17 +112,15 @@ with aba_missoes:
     missoes_hoje = [m for m in dados["missoes"] if dia_hoje_nome in m.get("dias", [])]
     
     if not missoes_hoje:
-        st.info("⚔️ Nenhuma missão agendada para hoje! Use o dia para descansar e recuperar energias.")
+        st.info("⚔️ Nenhuma missão agendada para hoje! Use o dia para descansar.")
     else:
         for m in missoes_hoje:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
             
             col_task, col_fail = st.columns(2)
-            
             with col_task:
                 check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
-            
             with col_fail:
                 botao_falha = st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida)
                 
@@ -140,29 +129,25 @@ with aba_missoes:
                 dados["xp"] += m["xp"]
                 dados["ouro"] += m["ouro"]
                 dados["atributos"][m["attr"]] += 1
-                
                 if not m.get("recorrente", True):
                     dados["missoes"].remove(m)
-                
                 while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
                     dados["xp"] -= calcular_xp_nec(dados["nivel"])
                     dados["nivel"] += 1
                     st.balloons()
                     st.success(f"🎉 LEVEL UP! Nível {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
                 st.rerun()
-                
             elif not check and foi_concluida:
                 m["concluida_em"] = ""
                 dados["xp"] = max(0, dados["xp"] - m["xp"])
                 dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
                 dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
                 st.rerun()
-                
             if botao_falha:
                 dados["xp"] = max(0, dados["xp"] - m["xp"])
                 dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
                 dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
-                st.error(f"🚨 PENALIDADE DO SISTEMA! Você perdeu -{m['xp']} XP e -💰 {m['ouro']} Ouro.")
+                st.error(f"🚨 PENALIDADE! Você perdeu -{m['xp']} XP e -💰 {m['ouro']} Ouro.")
                 time.sleep(1.5)
                 st.rerun()
 
@@ -170,12 +155,10 @@ with aba_missoes:
 with aba_loja:
     st.write(f"### 👛 Saldo da Carteira: **{dados['ouro']} Ouro**")
     st.write("---")
-    
     st.write("### 🛍️ Recompensas Disponíveis para Compra")
     for k, item in LOJA_SISTEMA.items():
         col_item_info, col_item_botao = st.columns(2)
         col_item_info.write(f"**{item['nome']}**  \n_Custo: 💰 {item['custo']} Ouro_")
-        
         if col_item_botao.button("Comprar", key=f"buy_{k}"):
             if dados["ouro"] >= item["custo"]:
                 dados["ouro"] -= item["custo"]
@@ -205,36 +188,33 @@ with aba_loja:
 # --- 4. ABA GERENCIAR HÁBITOS ---
 with aba_gerenciar_habitos:
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
-    
     with st.form("formulario_habito", clear_on_submit=True):
-        novo_nome = st.text_input("Nome do hábito/objetivo:")
-        attr_selecionado = st.selectbox("Qual atributo esse hábito treina?", list(MAPA_ATRIBUTOS.keys()))
-        
-        dias_selecionados = st.multiselect(
-            "Em quais dias da semana esse hábito deve aparecer na tela?",
-            options=DIAS_SEMANA_PT,
-            default=[dia_hoje_nome]
-        )
-        
-        recorrencia_tipo = st.radio(
-            "Regra de Repetição da Missão:",
-            ("🔄 Recorrente (Aparece toda semana nestes dias)", "📌 Única (Executa uma vez e some após o dia acabar)")
-        )
+        novo_name = st.text_input("Nome do hábito/objetivo:")
+        attr_sel = st.selectbox("Qual atributo esse hábito treina?", list(MAPA_ATRIBUTOS.keys()))
+        dias_sel = st.multiselect("Em quais dias da semana deve aparecer?", options=DIAS_SEMANA_PT, default=[dia_hoje_nome])
+        recorrencia_tipo = st.radio("Repetição:", ("🔄 Recorrente (Toda semana)", "📌 Única (Some após fazer)"))
         is_recorrente = True if "Recorrente" in recorrencia_tipo else False
-        
         col_xp, col_ouro = st.columns(2)
-        recompensa_xp = col_xp.number_input("Recompensa de XP", min_value=10, max_value=1000, value=100, step=10)
-        recompensa_ouro = col_ouro.number_input("Recompensa de Ouro", min_value=5, max_value=500, value=50, step=5)
-        
+        rxp = col_xp.number_input("XP", min_value=10, max_value=1000, value=100, step=10)
+        rouro = col_ouro.number_input("Ouro", min_value=5, max_value=500, value=50, step=5)
         botao_salvar = st.form_submit_button("Sincronizar com o Sistema")
         
-        if botao_salvar and novo_nome:
-            if not dias_selecionados:
-                st.error("🚨 Selecione ao menos um dia da semana para agendar a missão!")
+        if botao_salvar and novo_name:
+            if not dias_sel:
+                st.error("🚨 Selecione ao menos um dia!")
             else:
-                novo_id = int(time.time() * 1000) + random.randint(1, 99)
-                
-                # CORREÇÃO DEFINITIVA: Dicionário fechado perfeitamente com a chave '}' correta
-                nova_missao = {
-                    "id": novo_id,
-                    "nome": novo_nome,
+                nid = int(time.time() * 1000) + random.randint(1, 99)
+                # CORREÇÃO DEFINITIVA: Dicionário em linha contínua à prova de quebras de recuo
+                nova_missao = {"id": nid, "nome": novo_name, "xp": int(rxp), "ouro": int(rouro), "attr": MAPA_ATRIBUTOS[attr_sel], "dias": dias_sel, "recorrente": is_recorrente, "concluida_em": ""}
+                dados["missoes"].append(nova_missao)
+                st.success(f"📜 Objetivo '{novo_name}' adicionado!")
+                st.rerun()
+
+    st.write("---")
+    st.write("### ❌ Remover Objetivos Existentes")
+    if not dados["missoes"]:
+        st.caption("Nenhum hábito cadastrado.")
+    else:
+        for idx, m in enumerate(dados["missoes"]):
+            col_info, col_botao = st.columns(2)
+            agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
