@@ -7,7 +7,6 @@ from datetime import datetime
 # --- CONFIGURAÇÕES E DADOS PADRÃO ---
 DIAS_SEMANA_PT = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
-# Falas icônicas do anime Solo Leveling para o Level Up
 FRASES_LEVEL_UP = [
     "O Sistema determinou que você é digno de mais poder. Erga-se (Arise)!",
     "Se eu ficar mais forte, tudo o que eu perdi... eu poderei recuperar?",
@@ -25,7 +24,6 @@ MAPA_ATRIBUTOS = {
     "⚡ Agilidade": "Agilidade"
 }
 
-# Loja expandida com mais itens divertidos de recompensa
 LOJA_SISTEMA = {
     "1": {"nome": "🧪 Poção de Mana (Ver 1 episódio de anime/série)", "custo": 50},
     "2": {"nome": "📜 Pergaminho de Retorno (Fim de semana livre de videogame)", "custo": 200},
@@ -54,7 +52,6 @@ def calcular_xp_nec(nivel):
         return 100
     return int(100 * (nivel ** 1.8))
 
-# Tabela automática de Ranks de Caçador baseada no nível do jogador
 def obter_rank_cacador(nivel):
     if nivel >= 80: return "👑 Monarca Sombra (Rank S+)"
     elif nivel >= 60: return "⚔️ Caçador Rank S"
@@ -62,7 +59,7 @@ def obter_rank_cacador(nivel):
     elif nivel >= 30: return "🏹 Caçador Rank B"
     elif nivel >= 15: return "🗡️ Caçador Rank C"
     elif nivel >= 5: return "🪓 Caçador Rank D"
-    return "🦴 Caçador Rank E (O Mais Fraco do Mundo)"
+    return "Bone Caçador Rank E (O Mais Fraco do Mundo)"
 
 def obter_dia_atual_pt():
     indice = datetime.now().weekday()
@@ -94,8 +91,6 @@ opcao_menu = st.sidebar.radio(
 if opcao_menu == "👤 Meu Status":
     st.header("👤 PERFIL DO CAÇADOR")
     st.subheader(f"Nome: {dados['nome']}")
-    
-    # Exibe o Rank atual obtido automaticamente pelas conquistas de nível
     st.info(f"🏆 **Rank Atual:** {obter_rank_cacador(dados['nivel'])}")
     
     with st.expander("⚙️ Alterar Nome"):
@@ -222,4 +217,8 @@ elif opcao_menu == "❌ Configurações Críticas":
     if not dados["missoes"]:
         st.caption("Nenhum hábito cadastrado para deletar.")
     else:
+        # CORREÇÃO DEFINITIVA: Corrigido o recuo (indentação) do loop for de exclusão manual
         for idx, m in enumerate(dados["missoes"]):
+            agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
+            st.write(f"**{m['nome']}** ({m['attr']} | {agenda_str})")
+            
