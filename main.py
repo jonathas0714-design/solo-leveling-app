@@ -1,4 +1,5 @@
 import streamlit as st
+import json
 import random
 import time
 from datetime import datetime
@@ -204,7 +205,6 @@ with aba_gerenciar_habitos:
                 st.error("🚨 Selecione ao menos um dia!")
             else:
                 nid = int(time.time() * 1000) + random.randint(1, 99)
-                # CORREÇÃO DEFINITIVA: Dicionário em linha contínua à prova de quebras de recuo
                 nova_missao = {"id": nid, "nome": novo_name, "xp": int(rxp), "ouro": int(rouro), "attr": MAPA_ATRIBUTOS[attr_sel], "dias": dias_sel, "recorrente": is_recorrente, "concluida_em": ""}
                 dados["missoes"].append(nova_missao)
                 st.success(f"📜 Objetivo '{novo_name}' adicionado!")
@@ -218,3 +218,4 @@ with aba_gerenciar_habitos:
         for idx, m in enumerate(dados["missoes"]):
             col_info, col_botao = st.columns(2)
             agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
+            rep_str = "Recorrente" if m.get("recorrente", True) else "Única"
