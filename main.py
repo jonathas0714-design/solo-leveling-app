@@ -232,12 +232,10 @@ with aba_gerenciar_habitos:
         col_dias_2 = st.columns(3)
         
         dias_selecionados = []
-        if col_dias_1.checkbox("Seg", value=True): dias_selecionados.append("Segunda")
-        if col_dias_1.checkbox("Ter"): dias_selecionados.append("Terça")
-        if col_dias_1.checkbox("Qua"): dias_selecionados.append("Quarta")
-        if col_dias_1.checkbox("Qui"): dias_selecionados.append("Quinta")
-        if col_dias_2.checkbox("Sex"): dias_selecionados.append("Sexta")
-        # CORREÇÃO: Parênteses fechados corretamente abaixo
-        if col_dias_2.checkbox("Sáb"): dias_selecionados.append("Sábado")
-        if col_dias_2.checkbox("Dom"): dias_selecionados.append("Domingo")
-        
+        # CORREÇÃO DEFINITIVA: Índices numéricos posicionados corretamente dentro de colchetes []
+        if col_dias_1[0].checkbox("Seg", value=True): dias_selecionados.append("Segunda")
+        if col_dias_1[1].checkbox("Ter"): dias_selecionados.append("Terça")
+        if col_dias_1[2].checkbox("Qua"): dias_selecionados.append("Quarta")
+        if col_dias_1[3].checkbox("Qui"): dias_selecionados.append("Quinta")
+        if col_dias_2[0].checkbox("Sex"): dias_selecionados.append("Sexta")
+        if col_dias_2[1].checkbox("Sáb"): dias_selecionados.append("Sábado")
