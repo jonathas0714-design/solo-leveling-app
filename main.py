@@ -7,11 +7,14 @@ from datetime import datetime
 # --- CONFIGURAÇÕES E DADOS PADRÃO ---
 DIAS_SEMANA_PT = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
+# Falas icônicas do anime Solo Leveling para o Level Up
 FRASES_LEVEL_UP = [
-    "O Sistema determinou que você é digno de mais poder. Continue erguendo-se!",
-    "Do Caçador mais fraco do mundo ao topo absoluto. O despertar continua!",
-    "O medo é apenas uma ilusão. Você acabou de quebrar mais um limite!",
-    "O Sistema reconhece sua evolução. Erga-se (Arise)!"
+    "O Sistema determinou que você é digno de mais poder. Erga-se (Arise)!",
+    "Se eu ficar mais forte, tudo o que eu perdi... eu poderei recuperar?",
+    "Não importa o quão desesperadora a situação pareça, sempre há um caminho para vencer.",
+    "O Sistema me escolheu por um motivo. Eu continuarei subindo, não importa o preço.",
+    "Aqueles que zombavam do caçador mais fraco do mundo sumirão na sua sombra.",
+    "Eu sou o único que consegue subir de nível neste mundo. Avance!"
 ]
 
 MAPA_ATRIBUTOS = {
@@ -22,11 +25,14 @@ MAPA_ATRIBUTOS = {
     "⚡ Agilidade": "Agilidade"
 }
 
+# Loja expandida com mais itens divertidos de recompensa
 LOJA_SISTEMA = {
     "1": {"nome": "🧪 Poção de Mana (Ver 1 episódio de anime/série)", "custo": 50},
     "2": {"nome": "📜 Pergaminho de Retorno (Fim de semana livre de videogame)", "custo": 200},
     "3": {"nome": "🍖 Elixir da Juventude (Uma refeição livre/Lanche)", "custo": 300},
-    "4": {"nome": "🔑 Chave de Dungeon (Comprar um mimo ou livro novo)", "custo": 500}
+    "4": {"nome": "🔑 Chave de Dungeon (Comprar um mimo ou livro novo)", "custo": 500},
+    "5": {"nome": "🗡️ Adaga do Rei Demônio (Direito a ignorar 1 tarefa obrigatória sem punição)", "custo": 600},
+    "6": {"nome": "👑 Coroa do Monarca (Dia inteiro de descanso absoluto/Ócio sagrado)", "custo": 1000}
 }
 
 progresso_padrao = {
@@ -48,11 +54,20 @@ def calcular_xp_nec(nivel):
         return 100
     return int(100 * (nivel ** 1.8))
 
+# Tabela automática de Ranks de Caçador baseada no nível do jogador
+def obter_rank_cacador(nivel):
+    if nivel >= 80: return "👑 Monarca Sombra (Rank S+)"
+    elif nivel >= 60: return "⚔️ Caçador Rank S"
+    elif nivel >= 45: return "🛡️ Caçador Rank A"
+    elif nivel >= 30: return "🏹 Caçador Rank B"
+    elif nivel >= 15: return "🗡️ Caçador Rank C"
+    elif nivel >= 5: return "🪓 Caçador Rank D"
+    return "🦴 Caçador Rank E (O Mais Fraco do Mundo)"
+
 def obter_dia_atual_pt():
     indice = datetime.now().weekday()
     return DIAS_SEMANA_PT[indice]
 
-# --- INICIALIZAÇÃO E ARMAZENAMENTO SEGURO NA NUVEM ---
 if "dados_jogador" not in st.session_state:
     st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
 
@@ -66,7 +81,6 @@ for m_ciclo in dados["missoes"]:
         if m_ciclo.get("recorrente", True):
             m_ciclo["concluida_em"] = ""
 
-# --- CONFIGURAÇÃO DA INTERFACE MOBILE ---
 st.set_page_config(page_title="Solo Leveling", page_icon="⚡", layout="centered")
 
 # --- CONTROLADOR CENTRAL DE NAVEGAÇÃO MOBILE (SIDEBAR) ---
@@ -80,6 +94,9 @@ opcao_menu = st.sidebar.radio(
 if opcao_menu == "👤 Meu Status":
     st.header("👤 PERFIL DO CAÇADOR")
     st.subheader(f"Nome: {dados['nome']}")
+    
+    # Exibe o Rank atual obtido automaticamente pelas conquistas de nível
+    st.info(f"🏆 **Rank Atual:** {obter_rank_cacador(dados['nivel'])}")
     
     with st.expander("⚙️ Alterar Nome"):
         novo_nome_input = st.text_input("Novo nome:", value=dados["nome"])
@@ -98,7 +115,7 @@ if opcao_menu == "👤 Meu Status":
     for attr, valor in dados["atributos"].items():
         st.write(f"• **{attr}:** {valor}")
 
-# --- SEÇÃO 2: MISSÕES DE HOJE (Filtro por Data Real) ---
+# --- SEÇÃO 2: MISSÕES DE HOJE ---
 elif opcao_menu == "🎯 Missões de Hoje":
     st.header(f"🎯 META DIÁRIA ({dia_hoje_nome}-feira)")
     missoes_hoje = [m for m in dados["missoes"] if dia_hoje_nome in m.get("dias", [])]
@@ -116,7 +133,6 @@ elif opcao_menu == "🎯 Missões de Hoje":
             else:
                 col_btn_1, col_btn_2 = st.columns(2)
                 
-                # Ação Concluir
                 if col_btn_1.button("Concluir Objetivo", key=f"btn_done_{m['id']}"):
                     m["concluida_em"] = data_hoje
                     dados["xp"] += m["xp"]
@@ -130,11 +146,10 @@ elif opcao_menu == "🎯 Missões de Hoje":
                         dados["xp"] -= calcular_xp_nec(dados["nivel"])
                         dados["nivel"] += 1
                         st.balloons()
-                        st.success(f"🎉 LEVEL UP NÍVEL {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
+                        st.success(f"🎉 LEVEL UP NÍVEL {dados['nivel']}!\n_{random.choice(FRASES_LEVEL_UP)}_")
                     time.sleep(1)
                     st.rerun()
                 
-                # Ação Penalidade
                 if col_btn_2.button("🚨 Falhar Meta", key=f"btn_fail_{m['id']}"):
                     dados["xp"] = max(0, dados["xp"] - m["xp"])
                     dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
@@ -200,7 +215,7 @@ elif opcao_menu == "➕ Adicionar Hábito":
             time.sleep(1)
             st.rerun()
 
-# --- SEÇÃO 5: EXCLUSÃO E RESET CRÍTICO ---
+# --- SEÇÃO 5: CONFIGURAÇÕES CRÍTICAS ---
 elif opcao_menu == "❌ Configurações Críticas":
     st.header("❌ REMOVER MISSÕES")
     
@@ -208,19 +223,3 @@ elif opcao_menu == "❌ Configurações Críticas":
         st.caption("Nenhum hábito cadastrado para deletar.")
     else:
         for idx, m in enumerate(dados["missoes"]):
-            agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
-            st.write(f"**{m['nome']}** ({m['attr']} | {agenda_str})")
-            
-            # CORREÇÃO DEFINITIVA PARA CELULAR: Botão limpo sem conflito de loops de aba
-            if st.button("Excluir Permanentemente", key=f"del_m_{m['id']}_{idx}"):
-                dados["missoes"].remove(m)
-                st.toast("❌ Hábito removido!")
-                time.sleep(0.5)
-                st.rerun()
-            st.write("---")
-            
-    st.header("🚨 REINICIAR NÍVEL E STATUS")
-    st.warning("Isso redefinirá seu Nível para 1, zerará moedas/XP e voltará os Atributos para 10. Seus hábitos salvos serão mantidos.")
-    confirmacao_reset = st.checkbox("Confirmo que quero zerar o nível do meu caçador.", key="chk_reset_mobile")
-    
-    # CORREÇÃO DEFINITIVA PARA CELULAR: Botão limpo sem conflito de loops de aba
