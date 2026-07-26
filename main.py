@@ -1,12 +1,10 @@
 import streamlit as st
 import json
-import os
 import random
 import time
 from datetime import datetime
 
 # --- CONFIGURAÇÕES E DADOS PADRÃO ---
-ARQUIVO_SAVE = "solo_leveling_save.json"
 DIAS_SEMANA_PT = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
 FRASES_LEVEL_UP = [
@@ -45,24 +43,6 @@ progresso_padrao = {
     "inventario": {}
 }
 
-# --- FUNÇÕES DE PERSISTÊNCIA DIRETA NO PC ---
-def carregar_dados():
-    if os.path.exists(ARQUIVO_SAVE):
-        try:
-            with open(ARQUIVO_SAVE, 'r', encoding='utf-8') as f:
-                dados = json.load(f)
-                if "nome" not in dados: dados["nome"] = "Sung Jin-Woo"
-                if "missoes" not in dados: dados["missoes"] = progresso_padrao["missoes"].copy()
-                if "inventario" not in dados: dados["inventario"] = {}
-                return dados
-        except:
-            return json.loads(json.dumps(progresso_padrao))
-    return json.loads(json.dumps(progresso_padrao))
-
-def salvar_dados(dados):
-    with open(ARQUIVO_SAVE, 'w', encoding='utf-8') as f:
-        json.dump(dados, f, indent=4, ensure_ascii=False)
-
 def calcular_xp_nec(nivel):
     if nivel == 1:
         return 100
@@ -72,159 +52,175 @@ def obter_dia_atual_pt():
     indice = datetime.now().weekday()
     return DIAS_SEMANA_PT[indice]
 
-def gerenciar_ciclo_de_datas(dados, data_hoje):
-    nova_lista_missoes = []
-    mudou = False
-    for m in dados["missoes"]:
-        if not m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
-            mudou = True
-            continue
-        if m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
-            m["concluida_em"] = ""
-            mudou = True
-        nova_lista_missoes.append(m)
-    if mudou:
-        dados["missoes"] = nova_lista_missoes
-        salvar_dados(dados)
-
-# --- INTERFACE DO USUÁRIO ---
-st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
-st.title("⚡ SOLO LEVELING SYSTEM")
-
+# --- INICIALIZAÇÃO E ARMAZENAMENTO SEGURO NA NUVEM ---
 if "dados_jogador" not in st.session_state:
-    st.session_state["dados_jogador"] = carregar_dados()
+    st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
 
 dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
 dia_hoje_nome = obter_dia_atual_pt()
 
-gerenciar_ciclo_de_datas(dados, data_hoje)
+# Ciclo automático de renovação diária de tarefas
+for m_ciclo in dados["missoes"]:
+    if m_ciclo["concluida_em"] != "" and m_ciclo["concluida_em"] != data_hoje:
+        if m_ciclo.get("recorrente", True):
+            m_ciclo["concluida_em"] = ""
 
-aba_status, aba_missoes, aba_loja, aba_cadastrar, aba_excluir = st.tabs([
-    "👤 Status", "🎯 Missões de Hoje", "🛒 Loja", "➕ Criar Hábito", "❌ Configurações Críticas"
-])
+# --- CONFIGURAÇÃO DA INTERFACE MOBILE ---
+st.set_page_config(page_title="Solo Leveling", page_icon="⚡", layout="centered")
 
-# --- 1. ABA STATUS ---
-with aba_status:
-    st.subheader(f"Caçador: {dados['nome']}")
-    with st.expander("⚙️ Alterar Nome do Caçador"):
-        novo_nome_input = st.text_input("Insira seu nome ou apelido:", value=dados["nome"], key="input_nome_player")
-        if st.button("Confirmar Despertar", key="btn_nome_player"):
+# --- CONTROLADOR CENTRAL DE NAVEGAÇÃO MOBILE (SIDEBAR) ---
+st.sidebar.title("🎮 MENU DO SISTEMA")
+opcao_menu = st.sidebar.radio(
+    "Navegue pelas seções:",
+    ["👤 Meu Status", "🎯 Missões de Hoje", "🛒 Loja e Mochila", "➕ Adicionar Hábito", "❌ Configurações Críticas"]
+)
+
+# --- SEÇÃO 1: STATUS ---
+if opcao_menu == "👤 Meu Status":
+    st.header("👤 PERFIL DO CAÇADOR")
+    st.subheader(f"Nome: {dados['nome']}")
+    
+    with st.expander("⚙️ Alterar Nome"):
+        novo_nome_input = st.text_input("Novo nome:", value=dados["nome"])
+        if st.button("Confirmar Despertar"):
             if novo_nome_input.strip():
                 dados["nome"] = novo_nome_input.strip()
-                salvar_dados(dados)
                 st.rerun()
 
     xp_nec = calcular_xp_nec(dados["nivel"])
-    progresso_barra = min(dados["xp"] / xp_nec, 1.0)
-    st.progress(progresso_barra, text=f"Nível {dados['nivel']} ({dados['xp']}/{xp_nec} XP)")
+    st.progress(min(dados["xp"] / xp_nec, 1.0), text=f"Nível {dados['nivel']} ({dados['xp']}/{xp_nec} XP)")
     
-    col1, col2 = st.columns(2)
-    col1.metric("💰 Ouro", f"{dados['ouro']}")
-    col2.metric("📅 Hoje", f"{dia_hoje_nome}-feira")
+    st.write(f"**💰 Ouro:** {dados['ouro']} moedas")
+    st.write(f"**📅 Calendário:** {dia_hoje_nome}-feira")
     
     st.write("### 📊 Status de Atributos")
     for attr, valor in dados["atributos"].items():
-        st.write(f"**{attr}:** {valor}")
+        st.write(f"• **{attr}:** {valor}")
 
-# --- 2. ABA MISSÕES ---
-with aba_missoes:
-    st.write(f"### Objetivos Disponíveis para Hoje")
+# --- SEÇÃO 2: MISSÕES DE HOJE (Filtro por Data Real) ---
+elif opcao_menu == "🎯 Missões de Hoje":
+    st.header(f"🎯 META DIÁRIA ({dia_hoje_nome}-feira)")
     missoes_hoje = [m for m in dados["missoes"] if dia_hoje_nome in m.get("dias", [])]
     
     if not missoes_hoje:
-        st.info("⚔️ Nenhuma missão agendada para hoje! Descanse.")
+        st.info("⚔️ Nenhuma obrigação agendada para hoje! Use o tempo para descansar.")
     else:
         for m in missoes_hoje:
             foi_concluida = m["concluida_em"] == data_hoje
-            tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
+            st.write(f"#### {m['nome']}")
+            st.caption(f"Recompensa: +{m['xp']} XP | +💰{m['ouro']} | Evolui: {m['attr']}")
             
-            col_task, col_fail = st.columns(2)
-            with col_task:
-                check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
-            
-            with col_fail:
-                if st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida):
-                    dados["xp"] = max(0, dados["xp"] - m["xp"])
-                    dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
-                    dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
-                    salvar_dados(dados)
-                    st.error("Penalidade aplicada e salva!")
+            if foi_concluida:
+                st.success("✅ Objetivo Cumprido Hoje!")
+            else:
+                col_btn_1, col_btn_2 = st.columns(2)
+                
+                # Ação Concluir
+                if col_btn_1.button("Concluir Objetivo", key=f"btn_done_{m['id']}"):
+                    m["concluida_em"] = data_hoje
+                    dados["xp"] += m["xp"]
+                    dados["ouro"] += m["ouro"]
+                    dados["atributos"][m["attr"]] += 1
+                    
+                    if not m.get("recorrente", True):
+                        dados["missoes"].remove(m)
+                        
+                    while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
+                        dados["xp"] -= calcular_xp_nec(dados["nivel"])
+                        dados["nivel"] += 1
+                        st.balloons()
+                        st.success(f"🎉 LEVEL UP NÍVEL {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
                     time.sleep(1)
                     st.rerun()
                 
-            if check and not foi_concluida:
-                m["concluida_em"] = data_hoje
-                dados["xp"] += m["xp"]
-                dados["ouro"] += m["ouro"]
-                dados["atributos"][m["attr"]] += 1
-                
-                if not m.get("recorrente", True):
-                    dados["missoes"].remove(m)
-                    
-                while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
-                    dados["xp"] -= calcular_xp_nec(dados["nivel"])
-                    dados["nivel"] += 1
-                    st.balloons()
-                    st.success(f"🎉 LEVEL UP NÍVEL {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
-                
-                salvar_dados(dados)
-                st.rerun()
-            elif not check and foi_concluida:
-                m["concluida_em"] = ""
-                dados["xp"] = max(0, dados["xp"] - m["xp"])
-                dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
-                dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
-                salvar_dados(dados)
-                st.rerun()
+                # Ação Penalidade
+                if col_btn_2.button("🚨 Falhar Meta", key=f"btn_fail_{m['id']}"):
+                    dados["xp"] = max(0, dados["xp"] - m["xp"])
+                    dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
+                    dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
+                    st.sidebar.error(f"Punição aplicada! -{m['xp']} XP | -💰{m['ouro']}")
+                    time.sleep(1)
+                    st.rerun()
+            st.write("---")
 
-# --- 3. ABA LOJA ---
-with aba_loja:
-    st.write(f"### 👛 Saldo da Carteira: **{dados['ouro']} Ouro**")
+# --- SEÇÃO 3: LOJA E INVENTÁRIO ---
+elif opcao_menu == "🛒 Loja e Mochila":
+    st.header("🛒 LOJA DO SISTEMA")
+    st.subheader(f"Seu Saldo: 💰 {dados['ouro']} Ouro")
+    
     for k, item in LOJA_SISTEMA.items():
-        col_item_info, col_item_botao = st.columns(2)
-        col_item_info.write(f"**{item['nome']}**  \n_Custo: 💰 {item['custo']}_")
-        if col_item_botao.button("Comprar", key=f"buy_{k}"):
+        st.write(f"**{item['nome']}**")
+        st.caption(f"Custo: 💰 {item['custo']} Ouro")
+        if st.button("Comprar Recompensa", key=f"buy_m_{k}"):
             if dados["ouro"] >= item["custo"]:
                 dados["ouro"] -= item["custo"]
                 dados["inventario"][item["nome"]] = dados["inventario"].get(item["nome"], 0) + 1
-                salvar_dados(dados)
-                st.toast("🛒 Item adquirido!")
+                st.toast("🛒 Adquirido!")
                 st.rerun()
-            else: st.error("Ouro insuficiente!")
+            else:
+                st.error("Ouro insuficiente!")
+        st.write("---")
+        
+    st.header("🎒 SUA MOCHILA (VOUCHERS)")
+    if not dados["inventario"]:
+        st.caption("Inventário vazio.")
+    else:
+        for nome_item, qtd in list(dados["inventario"].items()):
+            st.write(f"• **{nome_item}** (Quantidade: x{qtd})")
+            if st.button("Gastar Recompensa", key=f"use_m_{nome_item}"):
+                dados["inventario"][nome_item] -= 1
+                if dados["inventario"][nome_item] <= 0:
+                    del dados["inventario"][nome_item]
+                st.balloons()
+                st.rerun()
 
-    st.write("---")
-    st.write("### 🎒 Seu Inventário")
-    for nome_item, qtd in list(dados["inventario"].items()):
-        col_inv_info, col_inv_botao = st.columns(2)
-        col_inv_info.write(f"• **{nome_item}** (x{qtd})")
-        if col_inv_botao.button("Usar", key=f"use_{nome_item}"):
-            dados["inventario"][nome_item] -= 1
-            if dados["inventario"][nome_item] <= 0: del dados["inventario"][nome_item]
-            salvar_dados(dados)
-            st.balloons()
+# --- SEÇÃO 4: ADICIONAR HÁBITO ---
+elif opcao_menu == "➕ Adicionar Hábito":
+    st.header("➕ NOVO OBJETIVO")
+    
+    novo_name = st.text_input("Nome do hábito/rotina:")
+    attr_sel = st.selectbox("Qual atributo ele vai treinar?", list(MAPA_ATRIBUTOS.keys()))
+    dias_sel = st.multiselect("Em quais dias ele deve surgir?", options=DIAS_SEMANA_PT, default=[dia_hoje_nome])
+    
+    recorrencia_tipo = st.radio("Frequência:", ("🔄 Recorrente (Toda semana)", "📌 Única (Executa e some)"))
+    is_recorrente = True if "Recorrente" in recorrencia_tipo else False
+    
+    rxp = st.number_input("Recompensa de XP:", min_value=10, max_value=1000, value=100, step=10)
+    rouro = st.number_input("Recompensa de Ouro:", min_value=5, max_value=500, value=50, step=5)
+    
+    if st.button("Sincronizar com o Sistema"):
+        if not novo_name or not dias_sel:
+            st.error("Preencha o nome e selecione pelo menos um dia da semana!")
+        else:
+            nid = int(time.time() * 1000) + random.randint(1, 99)
+            nova_missao = {"id": nid, "nome": novo_name, "xp": int(rxp), "ouro": int(rouro), "attr": MAPA_ATRIBUTOS[attr_sel], "dias": dias_sel, "recorrente": is_recorrente, "concluida_em": ""}
+            dados["missoes"].append(nova_missao)
+            st.success("Hábito agendado com sucesso!")
+            time.sleep(1)
             st.rerun()
 
-# --- 4. ABA CRIAR HÁBITO ---
-with aba_cadastrar:
-    st.write("### ➕ Cadastrar Novo Objetivo")
-    with st.form("formulario_habito", clear_on_submit=True):
-        novo_name = st.text_input("Nome do hábito:")
-        attr_sel = st.selectbox("Atributo de Treino:", list(MAPA_ATRIBUTOS.keys()))
-        dias_sel = st.multiselect("Dias da semana:", options=DIAS_SEMANA_PT, default=[dia_hoje_nome])
-        recorrencia_tipo = st.radio("Repetição:", ("🔄 Recorrente", "📌 Única"))
-        is_recorrente = True if "Recorrente" in recorrencia_tipo else False
-        rxp = st.number_input("XP", min_value=10, max_value=1000, value=100)
-        rouro = st.number_input("Ouro", min_value=5, max_value=500, value=50)
-        botao_salvar = st.form_submit_button("Salvar no Sistema")
-        
-        if botao_salvar and novo_name:
-            if not dias_sel: st.error("Selecione um dia!")
-            else:
-                nid = int(time.time() * 1000) + random.randint(1, 99)
-                nova_missao = {"id": nid, "nome": novo_name, "xp": int(rxp), "ouro": int(rouro), "attr": MAPA_ATRIBUTOS[attr_sel], "dias": dias_sel, "recorrente": is_recorrente, "concluida_em": ""}
-                dados["missoes"].append(nova_missao)
-                salvar_dados(dados)
-                st.success("Hábito salvo com sucesso!")
+# --- SEÇÃO 5: EXCLUSÃO E RESET CRÍTICO ---
+elif opcao_menu == "❌ Configurações Críticas":
+    st.header("❌ REMOVER MISSÕES")
+    
+    if not dados["missoes"]:
+        st.caption("Nenhum hábito cadastrado para deletar.")
+    else:
+        for idx, m in enumerate(dados["missoes"]):
+            agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
+            st.write(f"**{m['nome']}** ({m['attr']} | {agenda_str})")
+            
+            # CORREÇÃO DEFINITIVA PARA CELULAR: Botão limpo sem conflito de loops de aba
+            if st.button("Excluir Permanentemente", key=f"del_m_{m['id']}_{idx}"):
+                dados["missoes"].remove(m)
+                st.toast("❌ Hábito removido!")
+                time.sleep(0.5)
                 st.rerun()
-
+            st.write("---")
+            
+    st.header("🚨 REINICIAR NÍVEL E STATUS")
+    st.warning("Isso redefinirá seu Nível para 1, zerará moedas/XP e voltará os Atributos para 10. Seus hábitos salvos serão mantidos.")
+    confirmacao_reset = st.checkbox("Confirmo que quero zerar o nível do meu caçador.", key="chk_reset_mobile")
+    
+    # CORREÇÃO DEFINITIVA PARA CELULAR: Botão limpo sem conflito de loops de aba
