@@ -1,12 +1,9 @@
 import streamlit as st
-import json
-import os
 import random
 import time
 from datetime import datetime
 
 # --- CONFIGURAÇÕES E DADOS PADRÃO ---
-ARQUIVO_SAVE = "solo_leveling_save.json"
 DIAS_SEMANA_PT = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 
 FRASES_LEVEL_UP = [
@@ -45,24 +42,7 @@ progresso_padrao = {
     "inventario": {}
 }
 
-# --- FUNÇÕES DE PERSISTÊNCIA E LOGICA ---
-def carregar_dados():
-    if os.path.exists(ARQUIVO_SAVE):
-        try:
-            with open(ARQUIVO_SAVE, 'r', encoding='utf-8') as f:
-                dados = json.load(f)
-                if "nome" not in dados: dados["nome"] = "Sung Jin-Woo"
-                if "missoes" not in dados: dados["missoes"] = progresso_padrao["missoes"].copy()
-                if "inventario" not in dados: dados["inventario"] = {}
-                return dados
-        except:
-            return progresso_padrao.copy()
-    return progresso_padrao.copy()
-
-def salvar_dados(dados):
-    with open(ARQUIVO_SAVE, 'w', encoding='utf-8') as f:
-        json.dump(dados, f, indent=4, ensure_ascii=False)
-
+# --- FUNÇÕES DE LOGICA E CURVA DE NÍVEL ---
 def calcular_xp_nec(nivel):
     if nivel == 1:
         return 100
@@ -89,14 +69,14 @@ def gerenciar_ciclo_de_datas(dados, data_hoje):
         
     if mudou:
         dados["missoes"] = nova_lista_missoes
-        salvar_dados(dados)
 
 # --- INTERFACE DO USUÁRIO (STREAMLIT) ---
 st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
 st.title("⚡ SOLO LEVELING SYSTEM")
 
+# CORREÇÃO CRÍTICA: Inicializa e armazena os dados na nuvem através do session_state do Streamlit
 if "dados_jogador" not in st.session_state:
-    st.session_state["dados_jogador"] = carregar_dados()
+    st.session_state["dados_jogador"] = json.loads(json.dumps(progresso_padrao))
 
 dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
@@ -120,8 +100,6 @@ with aba_status:
         if st.button("Confirmar Despertar"):
             if novo_nome_input.strip():
                 dados["nome"] = novo_nome_input.strip()
-                salvar_dados(dados)
-                st.session_state["dados_jogador"] = dados
                 st.success("Identidade atualizada!")
                 st.rerun()
 
@@ -172,8 +150,6 @@ with aba_missoes:
                     st.balloons()
                     st.success(f"🎉 LEVEL UP! Nível {dados['nivel']}!\n{random.choice(FRASES_LEVEL_UP)}")
                 
-                salvar_dados(dados)
-                st.session_state["dados_jogador"] = dados
                 st.rerun()
                 
             elif not check and foi_concluida:
@@ -181,8 +157,6 @@ with aba_missoes:
                 dados["xp"] = max(0, dados["xp"] - m["xp"])
                 dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
                 dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
-                salvar_dados(dados)
-                st.session_state["dados_jogador"] = dados
                 st.rerun()
                 
             if botao_falha:
@@ -191,8 +165,6 @@ with aba_missoes:
                 dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
                 
                 st.error(f"🚨 PENALIDADE DO SISTEMA! Você falhou em '{m['nome']}'. Perdeu -{m['xp']} XP e -💰 {m['ouro']} Ouro.")
-                salvar_dados(dados)
-                st.session_state["dados_jogador"] = dados
                 time.sleep(1.5)
                 st.rerun()
 
@@ -210,8 +182,6 @@ with aba_loja:
             if dados["ouro"] >= item["custo"]:
                 dados["ouro"] -= item["custo"]
                 dados["inventario"][item["nome"]] = dados["inventario"].get(item["nome"], 0) + 1
-                salvar_dados(dados)
-                st.session_state["dados_jogador"] = dados
                 st.toast(f"🛒 Adquirido: {item['nome']}!")
                 st.rerun()
             else:
@@ -229,16 +199,42 @@ with aba_loja:
                 dados["inventario"][nome_item] -= 1
                 if dados["inventario"][nome_item] <= 0:
                     del dados["inventario"][nome_item]
-                salvar_dados(dados)
-                st.session_state["dados_jogador"] = dados
                 st.balloons()
                 st.success(f"🎉 Voucher Aplicado!")
                 time.sleep(1)
                 st.rerun()
 
-# --- 4. ABA GERENCIAR HÁBITOS (Com Multiselect Nativo à Prova de Erros) ---
+# --- 4. ABA GERENCIAR HÁBITOS ---
 with aba_gerenciar_habitos:
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
     
     with st.form("formulario_habito", clear_on_submit=True):
         novo_nome = st.text_input("Nome do hábito/objetivo:")
+        attr_selecionado = st.selectbox("Qual atributo esse hábito treina?", list(MAPA_ATRIBUTOS.keys()))
+        
+        dias_selecionados = st.multiselect(
+            "Em quais dias da semana esse hábito deve aparecer na tela?",
+            options=DIAS_SEMANA_PT,
+            default=[dia_hoje_nome]
+        )
+        
+        recorrencia_tipo = st.radio(
+            "Regra de Repetição da Missão:",
+            ("🔄 Recorrente (Aparece toda semana nestes dias)", "📌 Única (Executa uma vez e some após o dia acabar)")
+        )
+        is_recorrente = True if "Recorrente" in recorrencia_tipo else False
+        
+        col_xp, col_ouro = st.columns(2)
+        recompensa_xp = col_xp.number_input("Recompensa de XP", min_value=10, max_value=1000, value=100, step=10)
+        recompensa_ouro = col_ouro.number_input("Recompensa de Ouro", min_value=5, max_value=500, value=50, step=5)
+        
+        botao_salvar = st.form_submit_button("Sincronizar com o Sistema")
+        
+        if botao_salvar and novo_nome:
+            if not dias_selecionados:
+                st.error("🚨 Selecione ao menos um dia da semana para agendar a missão!")
+            else:
+                novo_id = int(time.time() * 1000) + random.randint(1, 99)
+                
+                nova_missao = {
+                    "id": novo_id,
