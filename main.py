@@ -236,11 +236,9 @@ with aba_loja:
                 time.sleep(1)
                 st.rerun()
 
-# --- 4. ABA GERENCIAR HÁBITOS ---
+# --- 4. ABA GERENCIAR HÁBITOS (Com Multiselect Nativo à Prova de Erros) ---
 with aba_gerenciar_habitos:
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
     
     with st.form("formulario_habito", clear_on_submit=True):
         novo_nome = st.text_input("Nome do hábito/objetivo:")
-        attr_selecionado = st.selectbox("Qual atributo esse hábito treina?", list(MAPA_ATRIBUTOS.keys()))
-        
