@@ -149,12 +149,11 @@ with aba_missoes:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
             
-            col_task, col_fail = st.columns([4, 1])
+            col_task, col_fail = st.columns(2)
             
             with col_task:
                 check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
             
-            # Sistema de Penalidade por botão explícito de Falha
             with col_fail:
                 botao_falha = st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida)
                 
@@ -186,7 +185,6 @@ with aba_missoes:
                 st.session_state["dados_jogador"] = dados
                 st.rerun()
                 
-            # Executa a penalidade subtraindo os pontos equivalentes da meta
             if botao_falha:
                 dados["xp"] = max(0, dados["xp"] - m["xp"])
                 dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
@@ -243,3 +241,6 @@ with aba_gerenciar_habitos:
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
     
     with st.form("formulario_habito", clear_on_submit=True):
+        novo_nome = st.text_input("Nome do hábito/objetivo:")
+        attr_selecionado = st.selectbox("Qual atributo esse hábito treina?", list(MAPA_ATRIBUTOS.keys()))
+        
