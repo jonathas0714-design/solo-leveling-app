@@ -43,7 +43,6 @@ progresso_padrao = {
     "inventario": {}
 }
 
-# --- FUNÇÕES DE LOGICA ---
 def calcular_xp_nec(nivel):
     if nivel == 1:
         return 100
@@ -186,8 +185,27 @@ with aba_loja:
                 time.sleep(1)
                 st.rerun()
 
-# --- 4. ABA GERENCIAR HÁBITOS ---
+# --- 4. ABA GERENCIAR HÁBITOS (REESTRUTURADA E BLINDADA) ---
 with aba_gerenciar_habitos:
+    # CORREÇÃO: Menu de Reset colocado de forma independente no topo para não sumir ou travar
+    st.write("### 🚨 Painel de Controle Crítico")
+    with st.expander("💀 Apagar Todo Progresso e Zerar o Nível"):
+        st.warning("Isso redefinirá seu Nível para 1, zerará moedas/XP e voltará os Atributos para 10.")
+        confirmacao_reset = st.checkbox("Confirmo que quero zerar o nível do meu caçador.", key="chk_reset_critico_real")
+        if st.button("Executar Reset de Sistema Completo", key="btn_reset_final_real"):
+            if confirmacao_reset:
+                dados["nivel"] = 1
+                dados["xp"] = 0
+                dados["ouro"] = 0
+                dados["atributos"] = {"Força": 10, "Inteligência": 10, "Vitalidade": 10, "Carisma": 10, "Agilidade": 10}
+                dados["inventario"] = {}
+                st.error("💥 Sistema reiniciado! Você voltou ao Nível 1.")
+                time.sleep(1.5)
+                st.rerun()
+            else:
+                st.info("Você precisa marcar a caixa de confirmação.")
+
+    st.write("---")
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
     with st.form("formulario_habito", clear_on_submit=True):
         novo_name = st.text_input("Nome do hábito/objetivo:")
@@ -198,24 +216,3 @@ with aba_gerenciar_habitos:
         col_xp, col_ouro = st.columns(2)
         rxp = col_xp.number_input("XP", min_value=10, max_value=1000, value=100, step=10)
         rouro = col_ouro.number_input("Ouro", min_value=5, max_value=500, value=50, step=5)
-        botao_salvar = st.form_submit_button("Sincronizar com o Sistema")
-        
-        if botao_salvar and novo_name:
-            if not dias_sel:
-                st.error("🚨 Selecione ao menos um dia!")
-            else:
-                nid = int(time.time() * 1000) + random.randint(1, 99)
-                nova_missao = {"id": nid, "nome": novo_name, "xp": int(rxp), "ouro": int(rouro), "attr": MAPA_ATRIBUTOS[attr_sel], "dias": dias_sel, "recorrente": is_recorrente, "concluida_em": ""}
-                dados["missoes"].append(nova_missao)
-                st.success(f"📜 Objetivo '{novo_name}' adicionado!")
-                st.rerun()
-
-    st.write("---")
-    st.write("### ❌ Remover Objetivos Existentes")
-    if not dados["missoes"]:
-        st.caption("Nenhum hábito cadastrado.")
-    else:
-        for idx, m in enumerate(dados["missoes"]):
-            col_info, col_botao = st.columns(2)
-            agenda_str = ", ".join([d[:3] for d in m.get("dias", [])])
-            rep_str = "Recorrente" if m.get("recorrente", True) else "Única"
