@@ -72,12 +72,26 @@ def obter_dia_atual_pt():
     indice = datetime.now().weekday()
     return DIAS_SEMANA_PT[indice]
 
-def resetar_missoes_se_novo_dia(dados, data_hoje):
+def gerenciar_ciclo_de_datas(dados, data_hoje):
+    nova_lista_missoes = []
+    mudou = False
+    
     for m in dados["missoes"]:
-        if m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
-            if m.get("recorrente", True):
-                m["concluida_em"] = ""
-    salvar_dados(dados)
+        # Se for uma missão única e já foi concluída em um dia anterior, ela é descartada do banco
+        if not m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
+            mudou = True
+            continue
+            
+        # Se for recorrente e mudou o dia real, limpa a marcação para poder fazer de novo
+        if m.get("recorrente", True) and m["concluida_em"] != "" and m["concluida_em"] != data_hoje:
+            m["concluida_em"] = ""
+            mudou = True
+            
+        nova_lista_missoes.append(m)
+        
+    if mudou:
+        dados["missoes"] = nova_lista_missoes
+        salvar_dados(dados)
 
 # --- INTERFACE DO USUÁRIO (STREAMLIT) ---
 st.set_page_config(page_title="Solo Leveling System", page_icon="⚡", layout="centered")
@@ -90,7 +104,8 @@ dados = st.session_state["dados_jogador"]
 data_hoje = datetime.now().strftime("%Y-%m-%d")
 dia_hoje_nome = obter_dia_atual_pt()
 
-resetar_missoes_se_novo_dia(dados, data_hoje)
+# Limpa e organiza as tarefas baseadas na data atual do celular
+gerenciar_ciclo_de_datas(dados, data_hoje)
 
 aba_status, aba_missoes, aba_loja, aba_gerenciar_habitos = st.tabs([
     "👤 Status", 
@@ -137,6 +152,7 @@ with aba_missoes:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
             
+            # Caixa de seleção para cumprir a meta
             check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
             
             if check and not foi_concluida:
@@ -145,10 +161,7 @@ with aba_missoes:
                 dados["ouro"] += m["ouro"]
                 dados["atributos"][m["attr"]] += 1
                 
-                # Se for missão única, deleta diretamente da lista global
-                if not m.get("recorrente", True):
-                    dados["missoes"].remove(m)
-                
+                # Sistema de níveis múltiplos dinâmicos
                 while dados["xp"] >= calcular_xp_nec(dados["nivel"]):
                     dados["xp"] -= calcular_xp_nec(dados["nivel"])
                     dados["nivel"] += 1
@@ -226,13 +239,3 @@ with aba_gerenciar_habitos:
         if col_dias_1.checkbox("Qua"): dias_selecionados.append("Quarta")
         if col_dias_1.checkbox("Qui"): dias_selecionados.append("Quinta")
         if col_dias_2.checkbox("Sex"): dias_selecionados.append("Sexta")
-        if col_dias_2.checkbox("Sáb"): dias_selecionados.append("Sábado")
-        if col_dias_2.checkbox("Dom"): dias_selecionados.append("Domingo")
-        
-        recorrencia_tipo = st.radio(
-            "Regra de Repetição da Missão:",
-            ("🔄 Recorrente (Aparece toda semana nestes dias)", "📌 Única (Executa uma vez e some para sempre)")
-        )
-        is_recorrente = True if "Recorrente" in recorrencia_tipo else False
-        
-        col_xp, col_ouro = st.columns(2)
