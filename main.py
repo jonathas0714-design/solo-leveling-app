@@ -149,8 +149,15 @@ with aba_missoes:
             foi_concluida = m["concluida_em"] == data_hoje
             tipo_txt = "🔄 Recorrente" if m.get("recorrente", True) else "📌 Única"
             
-            check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
+            col_task, col_fail = st.columns([4, 1])
             
+            with col_task:
+                check = st.checkbox(f"{m['nome']} (+{m['xp']}XP | +💰{m['ouro']}) [{tipo_txt}]", value=foi_concluida, key=f"m_{m['id']}")
+            
+            # Sistema de Penalidade por botão explícito de Falha
+            with col_fail:
+                botao_falha = st.button("🚨 Falhar", key=f"fail_{m['id']}", disabled=foi_concluida)
+                
             if check and not foi_concluida:
                 m["concluida_em"] = data_hoje
                 dados["xp"] += m["xp"]
@@ -177,6 +184,18 @@ with aba_missoes:
                 dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
                 salvar_dados(dados)
                 st.session_state["dados_jogador"] = dados
+                st.rerun()
+                
+            # Executa a penalidade subtraindo os pontos equivalentes da meta
+            if botao_falha:
+                dados["xp"] = max(0, dados["xp"] - m["xp"])
+                dados["ouro"] = max(0, dados["ouro"] - m["ouro"])
+                dados["atributos"][m["attr"]] = max(10, dados["atributos"][m["attr"]] - 1)
+                
+                st.error(f"🚨 PENALIDADE DO SISTEMA! Você falhou em '{m['nome']}'. Perdeu -{m['xp']} XP e -💰 {m['ouro']} Ouro.")
+                salvar_dados(dados)
+                st.session_state["dados_jogador"] = dados
+                time.sleep(1.5)
                 st.rerun()
 
 # --- 3. ABA LOJA E INVENTÁRIO ---
@@ -224,18 +243,3 @@ with aba_gerenciar_habitos:
     st.write("### ➕ Cadastrar Novo Objetivo no Sistema")
     
     with st.form("formulario_habito", clear_on_submit=True):
-        novo_nome = st.text_input("Nome do hábito/objetivo:")
-        attr_selecionado = st.selectbox("Qual atributo esse hábito treina?", list(MAPA_ATRIBUTOS.keys()))
-        
-        st.write("**Em quais dias da semana esse hábito deve aparecer na tela?**")
-        col_dias_1 = st.columns(4)
-        col_dias_2 = st.columns(3)
-        
-        dias_selecionados = []
-        # CORREÇÃO DEFINITIVA: Índices numéricos posicionados corretamente dentro de colchetes []
-        if col_dias_1[0].checkbox("Seg", value=True): dias_selecionados.append("Segunda")
-        if col_dias_1[1].checkbox("Ter"): dias_selecionados.append("Terça")
-        if col_dias_1[2].checkbox("Qua"): dias_selecionados.append("Quarta")
-        if col_dias_1[3].checkbox("Qui"): dias_selecionados.append("Quinta")
-        if col_dias_2[0].checkbox("Sex"): dias_selecionados.append("Sexta")
-        if col_dias_2[1].checkbox("Sáb"): dias_selecionados.append("Sábado")
